@@ -1,0 +1,628 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Three Hive</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #1a1a2e;
+    --card: #16213e;
+    --accent: #e2b714;
+    --correct: #0f9b58;
+    --wrong: #e74c3c;
+    --tri-default: #0f3460;
+    --tri-hover: #1a4a7a;
+    --text: #eee;
+    --muted: #8892b0;
+  }
+
+  body {
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    user-select: none;
+    overflow-x: hidden;
+  }
+
+  header {
+    text-align: center;
+    padding: 1.5rem 1rem 0.5rem;
+  }
+  header h1 {
+    font-size: 1.8rem;
+    color: var(--accent);
+    letter-spacing: 2px;
+  }
+  header p {
+    color: var(--muted);
+    font-size: 0.9rem;
+    margin-top: 0.3rem;
+  }
+
+  /* HUD Bar */
+  .hud {
+    display: flex;
+    gap: 2rem;
+    align-items: center;
+    justify-content: center;
+    flex-wrap: wrap;
+    padding: 0.8rem 1.5rem;
+    margin: 0.5rem 0;
+    background: var(--card);
+    border-radius: 12px;
+    min-width: 320px;
+  }
+  .hud-item { text-align: center; }
+  .hud-item .label { font-size: 0.7rem; text-transform: uppercase; color: var(--muted); letter-spacing: 1px; }
+  .hud-item .value { font-size: 1.6rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .hud-item .value.timer { color: var(--accent); }
+  .hud-item .value.score { color: var(--correct); }
+
+  /* Game area */
+  .game-container {
+    position: relative;
+    margin: 0.5rem auto;
+  }
+
+  /* Triangle cell */
+  .tri {
+    position: absolute;
+    cursor: pointer;
+    transition: transform 0.1s, filter 0.15s;
+  }
+  .tri:hover { transform: scale(1.08); filter: brightness(1.2); }
+  .tri.disabled { pointer-events: none; }
+
+  .tri polygon {
+    fill: var(--tri-default);
+    stroke: #0a1a3a;
+    stroke-width: 2;
+    transition: fill 0.2s;
+  }
+  .tri:hover polygon { fill: var(--tri-hover); }
+
+  .tri.correct polygon { fill: var(--correct); }
+  .tri.wrong polygon { fill: var(--wrong); }
+  .tri.reveal polygon { fill: rgba(14,155,88,0.3); stroke: var(--correct); stroke-width: 2.5; stroke-dasharray: 5 3; }
+
+  .tri text {
+    fill: #fff;
+    font-size: 16px;
+    font-weight: 700;
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    pointer-events: none;
+  }
+
+  /* Screens */
+  .screen {
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    gap: 1rem;
+  }
+  .screen.active { display: flex; }
+
+  .btn {
+    background: var(--accent);
+    color: #1a1a2e;
+    border: none;
+    padding: 0.75rem 2rem;
+    border-radius: 8px;
+    font-size: 1.05rem;
+    font-weight: 700;
+    cursor: pointer;
+    letter-spacing: 1px;
+    transition: transform 0.1s, box-shadow 0.15s;
+  }
+  .btn:hover { transform: translateY(-2px); box-shadow: 0 4px 16px rgba(226,183,20,0.3); }
+  .btn:active { transform: translateY(0); }
+
+  .btn-small {
+    padding: 0.5rem 1.2rem;
+    font-size: 0.85rem;
+  }
+
+  /* Difficulty selector */
+  .difficulty { display: flex; gap: 0.5rem; flex-wrap: wrap; justify-content: center; }
+  .difficulty button {
+    background: var(--card);
+    color: var(--text);
+    border: 2px solid transparent;
+    padding: 0.5rem 1rem;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 0.85rem;
+    font-weight: 600;
+    transition: border-color 0.15s, background 0.15s;
+  }
+  .difficulty button:hover { border-color: var(--accent); }
+  .difficulty button.selected { border-color: var(--accent); background: rgba(226,183,20,0.15); }
+
+  /* Results */
+  .result-title { font-size: 1.6rem; font-weight: 700; }
+  .result-stats { color: var(--muted); text-align: center; line-height: 1.8; }
+  .result-stats span { color: var(--text); font-weight: 600; }
+
+  /* High scores */
+  .scores-panel {
+    background: var(--card);
+    border-radius: 12px;
+    padding: 1rem 1.5rem;
+    min-width: 260px;
+    max-width: 340px;
+  }
+  .scores-panel h3 {
+    text-align: center;
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--accent);
+    margin-bottom: 0.5rem;
+  }
+  .scores-list { list-style: none; }
+  .scores-list li {
+    display: flex;
+    justify-content: space-between;
+    padding: 0.3rem 0;
+    border-bottom: 1px solid rgba(255,255,255,0.05);
+    font-size: 0.9rem;
+  }
+  .scores-list li .rank { color: var(--muted); width: 1.5rem; }
+  .scores-list li .sname { flex: 1; }
+  .scores-list li .sval { color: var(--accent); font-weight: 700; font-variant-numeric: tabular-nums; }
+  .empty-scores { color: var(--muted); text-align: center; font-size: 0.85rem; padding: 0.5rem 0; }
+
+  /* Countdown overlay */
+  .countdown-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(26,26,46,0.85);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+  }
+  .countdown-overlay.active { display: flex; }
+  .countdown-number {
+    font-size: 6rem;
+    font-weight: 900;
+    color: var(--accent);
+    animation: countPop 0.6s ease-out;
+  }
+  @keyframes countPop {
+    0% { transform: scale(2); opacity: 0; }
+    60% { transform: scale(0.95); opacity: 1; }
+    100% { transform: scale(1); opacity: 1; }
+  }
+
+  /* Shake animation for wrong taps */
+  @keyframes shake {
+    0%, 100% { transform: translateX(0); }
+    20% { transform: translateX(-4px); }
+    40% { transform: translateX(4px); }
+    60% { transform: translateX(-3px); }
+    80% { transform: translateX(3px); }
+  }
+  .tri.wrong { animation: shake 0.35s ease; }
+
+  /* Pulse for correct */
+  @keyframes pulse {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.12); }
+    100% { transform: scale(1); }
+  }
+  .tri.correct { animation: pulse 0.3s ease; }
+
+  footer {
+    margin-top: auto;
+    padding: 1rem;
+    color: var(--muted);
+    font-size: 0.75rem;
+    text-align: center;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>THREE HIVE</h1>
+  <p>Tap every number divisible by 3 — before time runs out!</p>
+</header>
+
+<!-- MENU SCREEN -->
+<div id="menu-screen" class="screen active">
+  <div style="margin-top:1rem;">
+    <p style="color:var(--muted);font-size:0.8rem;margin-bottom:0.4rem;text-align:center;">DIFFICULTY</p>
+    <div class="difficulty" id="diff-selector">
+      <button data-diff="easy">Easy (10 s)</button>
+      <button data-diff="medium" class="selected">Medium (8 s)</button>
+      <button data-diff="hard">Hard (6 s)</button>
+    </div>
+  </div>
+  <button class="btn" id="start-btn">START GAME</button>
+  <div class="scores-panel" id="menu-scores"></div>
+</div>
+
+<!-- HUD (visible during game) -->
+<div class="hud" id="hud" style="display:none;">
+  <div class="hud-item"><div class="label">Time</div><div class="value timer" id="timer-display">10.0</div></div>
+  <div class="hud-item"><div class="label">Found</div><div class="value" id="found-display">0 / 0</div></div>
+  <div class="hud-item"><div class="label">Score</div><div class="value score" id="score-display">0</div></div>
+</div>
+
+<!-- GAME AREA -->
+<div class="game-container" id="game-container" style="display:none;"></div>
+
+<!-- COUNTDOWN OVERLAY -->
+<div class="countdown-overlay" id="countdown-overlay">
+  <div class="countdown-number" id="countdown-number">3</div>
+</div>
+
+<!-- RESULT SCREEN -->
+<div id="result-screen" class="screen">
+  <div class="result-title" id="result-title"></div>
+  <div class="result-stats" id="result-stats"></div>
+  <div style="display:flex;gap:0.6rem;flex-wrap:wrap;justify-content:center;">
+    <button class="btn" id="replay-btn">PLAY AGAIN</button>
+    <button class="btn btn-small" id="menu-btn" style="background:var(--card);color:var(--text);">MENU</button>
+  </div>
+  <div class="scores-panel" id="result-scores"></div>
+</div>
+
+<footer>Three Hive — Divisible by Three Challenge</footer>
+
+<script>
+(() => {
+  /* ── Config ─────────────────────────────────── */
+  const DIFFICULTIES = {
+    easy:   { time: 10, rows: 5, cols: 6, numRange: [1, 60] },
+    medium: { time: 8,  rows: 6, cols: 7, numRange: [1, 90] },
+    hard:   { time: 6,  rows: 7, cols: 8, numRange: [1, 99] },
+  };
+
+  const TRI_W = 64;   // width of each triangle cell
+  const TRI_H = 56;   // height
+  const BONUS_STREAK = 3; // streak length for combo bonus
+
+  /* ── State ──────────────────────────────────── */
+  let difficulty = 'medium';
+  let cells = [];       // { num, div3, el, row, col, picked }
+  let totalDiv3 = 0;
+  let foundCount = 0;
+  let score = 0;
+  let streak = 0;
+  let timeLeft = 0;
+  let timerInterval = null;
+  let gameActive = false;
+
+  /* ── DOM refs ───────────────────────────────── */
+  const $ = id => document.getElementById(id);
+  const menuScreen   = $('menu-screen');
+  const resultScreen = $('result-screen');
+  const hud          = $('hud');
+  const gameContainer= $('game-container');
+  const countdownOverlay = $('countdown-overlay');
+  const countdownNumber  = $('countdown-number');
+  const timerDisp    = $('timer-display');
+  const foundDisp    = $('found-display');
+  const scoreDisp    = $('score-display');
+
+  /* ── Difficulty selector ────────────────────── */
+  const diffBtns = document.querySelectorAll('#diff-selector button');
+  diffBtns.forEach(btn => {
+    btn.addEventListener('click', () => {
+      diffBtns.forEach(b => b.classList.remove('selected'));
+      btn.classList.add('selected');
+      difficulty = btn.dataset.diff;
+    });
+  });
+
+  /* ── High scores (localStorage) ─────────────── */
+  function getScores() {
+    try { return JSON.parse(localStorage.getItem('hcr_scores') || '{}'); }
+    catch { return {}; }
+  }
+  function saveScore(diff, val) {
+    const all = getScores();
+    if (!all[diff]) all[diff] = [];
+    all[diff].push({ score: val, date: Date.now() });
+    all[diff].sort((a, b) => b.score - a.score);
+    all[diff] = all[diff].slice(0, 5);
+    localStorage.setItem('hcr_scores', JSON.stringify(all));
+  }
+  function renderScores(container, diff) {
+    const all = getScores();
+    const list = (all[diff] || []);
+    let html = `<h3>High Scores — ${diff}</h3>`;
+    if (list.length === 0) {
+      html += `<p class="empty-scores">No scores yet. Be the first!</p>`;
+    } else {
+      html += `<ul class="scores-list">`;
+      list.forEach((entry, i) => {
+        html += `<li><span class="rank">${i + 1}.</span><span class="sname">${new Date(entry.date).toLocaleDateString()}</span><span class="sval">${entry.score}</span></li>`;
+      });
+      html += `</ul>`;
+    }
+    container.innerHTML = html;
+  }
+
+  /* ── Triangle SVG builder ───────────────────── */
+  function makeTri(num, pointsUp) {
+    const svgNS = 'http://www.w3.org/2000/svg';
+    const svg = document.createElementNS(svgNS, 'svg');
+    svg.setAttribute('width', TRI_W);
+    svg.setAttribute('height', TRI_H);
+    svg.setAttribute('viewBox', `0 0 ${TRI_W} ${TRI_H}`);
+    svg.classList.add('tri');
+
+    const poly = document.createElementNS(svgNS, 'polygon');
+    const pad = 3;
+    let pts;
+    if (pointsUp) {
+      pts = `${TRI_W / 2},${pad} ${TRI_W - pad},${TRI_H - pad} ${pad},${TRI_H - pad}`;
+    } else {
+      pts = `${pad},${pad} ${TRI_W - pad},${pad} ${TRI_W / 2},${TRI_H - pad}`;
+    }
+    poly.setAttribute('points', pts);
+    svg.appendChild(poly);
+
+    const txt = document.createElementNS(svgNS, 'text');
+    txt.setAttribute('x', TRI_W / 2);
+    txt.setAttribute('y', pointsUp ? TRI_H * 0.62 : TRI_H * 0.42);
+    txt.setAttribute('text-anchor', 'middle');
+    txt.setAttribute('dominant-baseline', 'central');
+    txt.textContent = num;
+    svg.appendChild(txt);
+
+    return svg;
+  }
+
+  /* ── Board generation ───────────────────────── */
+  function buildBoard() {
+    const cfg = DIFFICULTIES[difficulty];
+    const { rows, cols, numRange } = cfg;
+    gameContainer.innerHTML = '';
+    cells = [];
+    totalDiv3 = 0;
+    foundCount = 0;
+    score = 0;
+    streak = 0;
+
+    // Generate unique random numbers
+    const count = rows * cols;
+    const pool = new Set();
+    while (pool.size < count) {
+      pool.add(Math.floor(Math.random() * (numRange[1] - numRange[0] + 1)) + numRange[0]);
+    }
+    const nums = [...pool];
+
+    // Ensure at least 25% are divisible by 3
+    const minDiv3 = Math.ceil(count * 0.25);
+    let div3Count = nums.filter(n => n % 3 === 0).length;
+    let idx = 0;
+    while (div3Count < minDiv3 && idx < nums.length) {
+      if (nums[idx] % 3 !== 0) {
+        // Replace with a multiple of 3
+        let replacement;
+        do { replacement = (Math.floor(Math.random() * 33) + 1) * 3; }
+        while (nums.includes(replacement));
+        nums[idx] = replacement;
+        div3Count++;
+      }
+      idx++;
+    }
+
+    // Shuffle
+    for (let i = nums.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [nums[i], nums[j]] = [nums[j], nums[i]];
+    }
+
+    // Layout: honeycomb-style rows of alternating up/down triangles
+    const boardW = (cols * TRI_W / 2) + TRI_W / 2;
+    const boardH = rows * TRI_H + 10;
+    gameContainer.style.width = boardW + 'px';
+    gameContainer.style.height = boardH + 'px';
+
+    let numIdx = 0;
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        const pointsUp = (r + c) % 2 === 0;
+        const num = nums[numIdx++];
+        const div3 = num % 3 === 0;
+        if (div3) totalDiv3++;
+
+        const el = makeTri(num, pointsUp);
+
+        // Position
+        const x = c * (TRI_W / 2);
+        const y = r * TRI_H;
+        el.style.left = x + 'px';
+        el.style.top = y + 'px';
+
+        const cell = { num, div3, el, row: r, col: c, picked: false };
+        cells.push(cell);
+
+        el.addEventListener('click', () => onCellClick(cell));
+        gameContainer.appendChild(el);
+      }
+    }
+
+    updateHUD();
+  }
+
+  /* ── Cell click handler ─────────────────────── */
+  function onCellClick(cell) {
+    if (!gameActive || cell.picked) return;
+    cell.picked = true;
+    cell.el.classList.add('disabled');
+
+    if (cell.div3) {
+      cell.el.classList.add('correct');
+      foundCount++;
+      streak++;
+      let pts = 100;
+      if (streak >= BONUS_STREAK) pts += 50 * (streak - BONUS_STREAK + 1); // combo
+      // Time bonus: more time left = more points
+      pts += Math.round(timeLeft * 10);
+      score += pts;
+
+      if (foundCount === totalDiv3) {
+        // Perfect — found them all!
+        endGame(true);
+        return;
+      }
+    } else {
+      cell.el.classList.add('wrong');
+      streak = 0;
+      score = Math.max(0, score - 50);
+    }
+
+    updateHUD();
+  }
+
+  /* ── HUD ────────────────────────────────────── */
+  function updateHUD() {
+    foundDisp.textContent = `${foundCount} / ${totalDiv3}`;
+    scoreDisp.textContent = score;
+  }
+
+  /* ── Timer ──────────────────────────────────── */
+  function startTimer() {
+    const cfg = DIFFICULTIES[difficulty];
+    timeLeft = cfg.time;
+    timerDisp.textContent = timeLeft.toFixed(1);
+
+    timerInterval = setInterval(() => {
+      timeLeft -= 0.1;
+      if (timeLeft <= 0) {
+        timeLeft = 0;
+        timerDisp.textContent = '0.0';
+        endGame(false);
+        return;
+      }
+      timerDisp.textContent = timeLeft.toFixed(1);
+      // Color warning
+      if (timeLeft <= 3) timerDisp.style.color = 'var(--wrong)';
+      else timerDisp.style.color = '';
+    }, 100);
+  }
+
+  /* ── Countdown ──────────────────────────────── */
+  function doCountdown(cb) {
+    let count = 3;
+    countdownOverlay.classList.add('active');
+    countdownNumber.textContent = count;
+
+    const tick = () => {
+      count--;
+      if (count === 0) {
+        countdownNumber.textContent = 'GO!';
+        setTimeout(() => {
+          countdownOverlay.classList.remove('active');
+          cb();
+        }, 400);
+      } else {
+        countdownNumber.textContent = count;
+        // Re-trigger animation
+        countdownNumber.style.animation = 'none';
+        void countdownNumber.offsetHeight;
+        countdownNumber.style.animation = '';
+        setTimeout(tick, 600);
+      }
+    };
+    setTimeout(tick, 600);
+  }
+
+  /* ── Game lifecycle ─────────────────────────── */
+  function startGame() {
+    menuScreen.classList.remove('active');
+    resultScreen.classList.remove('active');
+
+    buildBoard();
+    hud.style.display = 'flex';
+    gameContainer.style.display = 'block';
+
+    // Disable clicks during countdown
+    gameActive = false;
+
+    doCountdown(() => {
+      gameActive = true;
+      startTimer();
+    });
+  }
+
+  function endGame(allFound) {
+    gameActive = false;
+    clearInterval(timerInterval);
+
+    // Reveal unfound div3 cells
+    cells.forEach(c => {
+      if (c.div3 && !c.picked) c.el.classList.add('reveal');
+      c.el.classList.add('disabled');
+    });
+
+    // Bonus for finding all
+    if (allFound) {
+      score += Math.round(timeLeft * 100); // big time bonus
+    }
+    updateHUD();
+
+    saveScore(difficulty, score);
+
+    // Show result after a short delay so player sees the reveal
+    setTimeout(() => {
+      hud.style.display = 'none';
+      gameContainer.style.display = 'none';
+
+      const pct = totalDiv3 > 0 ? Math.round((foundCount / totalDiv3) * 100) : 0;
+      let title;
+      if (allFound) title = 'PERFECT!';
+      else if (pct >= 75) title = 'GREAT JOB!';
+      else if (pct >= 50) title = 'NOT BAD!';
+      else title = 'KEEP TRYING!';
+
+      $('result-title').textContent = title;
+      $('result-title').style.color = allFound ? 'var(--correct)' : (pct >= 50 ? 'var(--accent)' : 'var(--wrong)');
+
+      $('result-stats').innerHTML = `
+        Found <span>${foundCount}</span> of <span>${totalDiv3}</span> divisible-by-3 numbers<br>
+        Final Score: <span style="color:var(--correct)">${score}</span><br>
+        Difficulty: <span>${difficulty}</span>
+        ${allFound ? `<br>Time remaining bonus: <span>+${Math.round(timeLeft * 100)}</span>` : ''}
+      `;
+
+      renderScores($('result-scores'), difficulty);
+      resultScreen.classList.add('active');
+    }, 1200);
+  }
+
+  /* ── Button wiring ──────────────────────────── */
+  $('start-btn').addEventListener('click', startGame);
+  $('replay-btn').addEventListener('click', startGame);
+  $('menu-btn').addEventListener('click', () => {
+    resultScreen.classList.remove('active');
+    hud.style.display = 'none';
+    gameContainer.style.display = 'none';
+    renderScores($('menu-scores'), difficulty);
+    menuScreen.classList.add('active');
+  });
+
+  /* ── Init ───────────────────────────────────── */
+  renderScores($('menu-scores'), difficulty);
+  // Update scores panel when difficulty changes
+  diffBtns.forEach(btn => {
+    btn.addEventListener('click', () => renderScores($('menu-scores'), btn.dataset.diff));
+  });
+
+})();
+</script>
+</body>
+</html>
