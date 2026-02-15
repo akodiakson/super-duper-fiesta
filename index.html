@@ -243,9 +243,9 @@
   <div style="margin-top:1rem;">
     <p style="color:var(--muted);font-size:0.8rem;margin-bottom:0.4rem;text-align:center;">DIFFICULTY</p>
     <div class="difficulty" id="diff-selector">
-      <button data-diff="easy">Easy (12 s)</button>
+      <button data-diff="easy">Easy (36 s)</button>
       <button data-diff="medium" class="selected">Medium (24 s)</button>
-      <button data-diff="hard">Hard (36 s)</button>
+      <button data-diff="hard">Hard (12 s)</button>
     </div>
   </div>
   <div style="margin-top:0.5rem;">
@@ -292,9 +292,9 @@
 (() => {
   /* ── Config ─────────────────────────────────── */
   const DIFFICULTIES = {
-    easy:   { time: 12, numRange: [1, 60] },
+    easy:   { time: 36, numRange: [1, 60] },
     medium: { time: 24, numRange: [1, 90] },
-    hard:   { time: 36, numRange: [1, 99] },
+    hard:   { time: 12, numRange: [1, 99] },
   };
 
   const TRIANGLE_COUNTS = [9, 18, 27];
