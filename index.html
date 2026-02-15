@@ -74,19 +74,21 @@
   /* Triangle cell */
   .tri {
     position: absolute;
-    cursor: pointer;
+    pointer-events: none;
     transition: transform 0.1s, filter 0.15s;
   }
-  .tri:hover { transform: scale(1.08); filter: brightness(1.2); }
-  .tri.disabled { pointer-events: none; }
+  .tri:has(polygon:hover) { transform: scale(1.08); filter: brightness(1.2); }
+  .tri.disabled polygon { pointer-events: none; }
 
   .tri polygon {
     fill: var(--tri-default);
     stroke: #0a1a3a;
     stroke-width: 2;
     transition: fill 0.2s;
+    pointer-events: fill;
+    cursor: pointer;
   }
-  .tri:hover polygon { fill: var(--tri-hover); }
+  .tri polygon:hover { fill: var(--tri-hover); }
 
   .tri.correct polygon { fill: var(--correct); }
   .tri.wrong polygon { fill: var(--wrong); }
@@ -241,9 +243,17 @@
   <div style="margin-top:1rem;">
     <p style="color:var(--muted);font-size:0.8rem;margin-bottom:0.4rem;text-align:center;">DIFFICULTY</p>
     <div class="difficulty" id="diff-selector">
-      <button data-diff="easy">Easy (10 s)</button>
-      <button data-diff="medium" class="selected">Medium (8 s)</button>
-      <button data-diff="hard">Hard (6 s)</button>
+      <button data-diff="easy">Easy (12 s)</button>
+      <button data-diff="medium" class="selected">Medium (24 s)</button>
+      <button data-diff="hard">Hard (36 s)</button>
+    </div>
+  </div>
+  <div style="margin-top:0.5rem;">
+    <p style="color:var(--muted);font-size:0.8rem;margin-bottom:0.4rem;text-align:center;">TRIANGLES</p>
+    <div class="difficulty" id="tri-selector">
+      <button data-tri="9">9</button>
+      <button data-tri="18" class="selected">18</button>
+      <button data-tri="27">27</button>
     </div>
   </div>
   <button class="btn" id="start-btn">START GAME</button>
@@ -282,10 +292,13 @@
 (() => {
   /* ── Config ─────────────────────────────────── */
   const DIFFICULTIES = {
-    easy:   { time: 10, rows: 5, cols: 6, numRange: [1, 60] },
-    medium: { time: 8,  rows: 6, cols: 7, numRange: [1, 90] },
-    hard:   { time: 6,  rows: 7, cols: 8, numRange: [1, 99] },
+    easy:   { time: 12, numRange: [1, 60] },
+    medium: { time: 24, numRange: [1, 90] },
+    hard:   { time: 36, numRange: [1, 99] },
   };
+
+  const TRIANGLE_COUNTS = [9, 18, 27];
+  let triangleCount = 18; // default
 
   const TRI_W = 64;   // width of each triangle cell
   const TRI_H = 56;   // height
@@ -384,19 +397,32 @@
     return svg;
   }
 
+  /* ── Triangle selector ────────────────────────── */
+  const triBtns = document.querySelectorAll('#tri-selector button');
+  triBtns.forEach(btn => {
+    btn.addEventListener('click', () => {
+      triBtns.forEach(b => b.classList.remove('selected'));
+      btn.classList.add('selected');
+      triangleCount = parseInt(btn.dataset.tri, 10);
+    });
+  });
+
   /* ── Board generation ───────────────────────── */
   function buildBoard() {
     const cfg = DIFFICULTIES[difficulty];
-    const { rows, cols, numRange } = cfg;
+    const { numRange } = cfg;
+    // Compute a grid layout for the chosen triangle count
+    const count = triangleCount;
+    let cols, rows;
+    if (count === 9) { cols = 5; rows = 2; }       // 5*2 = 10 slots, we use 9
+    else if (count === 18) { cols = 6; rows = 3; }  // 6*3 = 18
+    else { cols = 9; rows = 3; }                     // 9*3 = 27
     gameContainer.innerHTML = '';
     cells = [];
     totalDiv3 = 0;
     foundCount = 0;
     score = 0;
     streak = 0;
-
-    // Generate unique random numbers
-    const count = rows * cols;
     const pool = new Set();
     while (pool.size < count) {
       pool.add(Math.floor(Math.random() * (numRange[1] - numRange[0] + 1)) + numRange[0]);
@@ -434,6 +460,7 @@
     let numIdx = 0;
     for (let r = 0; r < rows; r++) {
       for (let c = 0; c < cols; c++) {
+        if (numIdx >= count) break;
         const pointsUp = (r + c) % 2 === 0;
         const num = nums[numIdx++];
         const div3 = num % 3 === 0;
@@ -450,7 +477,8 @@
         const cell = { num, div3, el, row: r, col: c, picked: false };
         cells.push(cell);
 
-        el.addEventListener('click', () => onCellClick(cell));
+        // Attach click to polygon for accurate touch targets
+        el.querySelector('polygon').addEventListener('click', () => onCellClick(cell));
         gameContainer.appendChild(el);
       }
     }
