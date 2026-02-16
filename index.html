@@ -34,7 +34,9 @@
     padding-bottom: env(safe-area-inset-bottom);
   }
   body.game-active {
-    overflow: hidden;
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: none;
   }
 
   header {
@@ -515,11 +517,16 @@
     const rows = maxRow + 1;
 
     // Compute responsive triangle size based on available space
+    // Use visualViewport when available to account for browser zoom
+    const vp = window.visualViewport;
+    const vpW = vp ? vp.width : window.innerWidth;
+    const vpH = vp ? vp.height : window.innerHeight;
+
     const paddingX = 16;
-    const availW = window.innerWidth - paddingX;
+    const availW = vpW - paddingX;
     const idealW = Math.floor(availW / (cols / 2 + 0.5));
 
-    const availH = window.innerHeight - 180; // leave room for header + HUD
+    const availH = vpH - 180; // leave room for header + HUD
     const idealFromH = Math.round((availH / rows) * 64 / 56);
 
     TRI_W = Math.min(90, Math.max(44, Math.min(idealW, idealFromH)));
