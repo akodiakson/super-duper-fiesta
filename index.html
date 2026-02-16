@@ -8,15 +8,19 @@
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
   :root {
-    --bg: #1a1a2e;
-    --card: #16213e;
-    --accent: #e2b714;
-    --correct: #0f9b58;
-    --wrong: #e74c3c;
-    --tri-default: #0f3460;
-    --tri-hover: #1a4a7a;
-    --text: #eee;
-    --muted: #8892b0;
+    --bg: #1e1e2e;
+    --card: #2a2a3d;
+    --accent: #f59e0b;
+    --accent-glow: rgba(245, 158, 11, 0.3);
+    --correct: #34d399;
+    --wrong: #f87171;
+    --tile-default: #334155;
+    --tile-hover: #475569;
+    --connected: #818cf8;
+    --chain-member: #a5b4fc;
+    --text: #f1f5f9;
+    --muted: #94a3b8;
+    --stroke: #1e293b;
   }
 
   body {
@@ -57,7 +61,7 @@
   /* HUD Bar */
   .hud {
     display: flex;
-    gap: 2rem;
+    gap: 1.5rem;
     align-items: center;
     justify-content: center;
     flex-wrap: wrap;
@@ -73,6 +77,24 @@
   .hud-item .value.timer { color: var(--accent); }
   .hud-item .value.score { color: var(--correct); }
 
+  .buzz-badge {
+    display: none;
+    align-items: center;
+    gap: 0.3rem;
+    background: linear-gradient(135deg, #d97706, var(--accent));
+    color: var(--bg);
+    font-size: 0.75rem;
+    font-weight: 800;
+    padding: 3px 10px;
+    border-radius: 20px;
+    animation: pulseGlow 1.5s ease infinite;
+  }
+  .buzz-badge.active { display: inline-flex; }
+  @keyframes pulseGlow {
+    0%, 100% { box-shadow: 0 0 8px var(--accent-glow); }
+    50% { box-shadow: 0 0 20px var(--accent-glow), 0 0 40px rgba(245,158,11,0.15); }
+  }
+
   /* Game area */
   .game-container {
     position: relative;
@@ -82,10 +104,8 @@
 
   .drag-overlay {
     position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
     pointer-events: none;
     z-index: 50;
   }
@@ -98,15 +118,15 @@
     filter: drop-shadow(0 0 6px var(--accent));
   }
   .drag-overlay polyline.chain-success {
-    stroke: #7c3aed;
+    stroke: var(--connected);
     stroke-width: 2.5;
-    filter: drop-shadow(0 0 4px #7c3aed);
+    filter: drop-shadow(0 0 4px var(--connected));
     opacity: 0.7;
   }
 
   .chain-sum-indicator {
     position: absolute;
-    background: rgba(26,26,46,0.9);
+    background: rgba(30,30,46,0.9);
     color: var(--accent);
     font-size: 0.8rem;
     font-weight: 700;
@@ -119,47 +139,62 @@
   .chain-sum-indicator.valid { color: var(--correct); }
   .chain-sum-indicator.invalid { color: var(--wrong); }
 
-  /* Triangle cell */
-  .tri {
+  /* Tile cell (shared for hex and tri) */
+  .cell {
     position: absolute;
     pointer-events: none;
     transition: transform 0.1s, filter 0.15s;
   }
   @media (hover: hover) {
-    .tri:has(polygon:hover) { transform: scale(1.08); filter: brightness(1.2); }
+    .cell:has(polygon:hover) { transform: scale(1.08); filter: brightness(1.2); }
   }
-  .tri.disabled polygon { pointer-events: none; }
+  .cell.disabled polygon { pointer-events: none; }
 
-  .tri polygon {
-    fill: var(--tri-default);
-    stroke: #0a1a3a;
+  .cell polygon {
+    fill: var(--tile-default);
+    stroke: var(--stroke);
     stroke-width: 2;
     transition: fill 0.2s;
     pointer-events: fill;
     cursor: pointer;
   }
   @media (hover: hover) {
-    .tri polygon:hover { fill: var(--tri-hover); }
+    .cell polygon:hover { fill: var(--tile-hover); }
   }
 
-  .tri.correct polygon { fill: var(--correct); }
-  .tri.wrong polygon { fill: var(--wrong); }
-  .tri.reveal polygon { fill: rgba(14,155,88,0.3); stroke: var(--correct); stroke-width: 2.5; stroke-dasharray: 5 3; }
-  .tri.connected polygon { fill: #7c3aed; }
-  .tri.drag-source polygon { fill: var(--accent); }
-  .tri.chain-member polygon { fill: #c084fc; }
+  .cell.correct polygon { fill: var(--correct); }
+  .cell.wrong polygon { fill: var(--wrong); }
+  .cell.reveal polygon { fill: rgba(52,211,153,0.25); stroke: var(--correct); stroke-width: 2.5; stroke-dasharray: 5 3; }
+  .cell.connected polygon { fill: var(--connected); }
+  .cell.drag-source polygon { fill: var(--accent); }
+  .cell.chain-member polygon { fill: var(--chain-member); }
 
   @keyframes chainPulse {
     0%, 100% { filter: brightness(1); }
     50% { filter: brightness(1.4); }
   }
-  .tri.drag-target-valid polygon { animation: chainPulse 0.8s ease infinite; }
+  .cell.drag-target-valid polygon { animation: chainPulse 0.8s ease infinite; }
 
-  .tri text {
+  .cell text {
     fill: #fff;
     font-weight: 700;
     font-family: 'Segoe UI', system-ui, sans-serif;
     pointer-events: none;
+  }
+
+  /* Floating feedback text */
+  .float-text {
+    position: absolute;
+    font-weight: 800;
+    font-size: 0.85rem;
+    pointer-events: none;
+    z-index: 60;
+    animation: floatUp 0.8s ease-out forwards;
+    white-space: nowrap;
+  }
+  @keyframes floatUp {
+    0% { opacity: 1; transform: translateY(0) scale(1); }
+    100% { opacity: 0; transform: translateY(-30px) scale(1.1); }
   }
 
   /* Screens */
@@ -173,7 +208,7 @@
 
   .btn {
     background: var(--accent);
-    color: #1a1a2e;
+    color: var(--bg);
     border: none;
     padding: 0.75rem 2rem;
     border-radius: 8px;
@@ -182,9 +217,10 @@
     cursor: pointer;
     letter-spacing: 1px;
     transition: transform 0.1s, box-shadow 0.15s;
+    font-family: inherit;
   }
   @media (hover: hover) {
-    .btn:hover { transform: translateY(-2px); box-shadow: 0 4px 16px rgba(226,183,20,0.3); }
+    .btn:hover { transform: translateY(-2px); box-shadow: 0 4px 16px var(--accent-glow); }
   }
   .btn:active { transform: translateY(0); }
 
@@ -193,9 +229,9 @@
     font-size: 0.85rem;
   }
 
-  /* Difficulty selector */
-  .difficulty { display: flex; gap: 0.5rem; flex-wrap: wrap; justify-content: center; }
-  .difficulty button {
+  /* Selector buttons */
+  .selector { display: flex; gap: 0.5rem; flex-wrap: wrap; justify-content: center; }
+  .selector button {
     background: var(--card);
     color: var(--text);
     border: 2px solid transparent;
@@ -204,12 +240,13 @@
     cursor: pointer;
     font-size: 0.85rem;
     font-weight: 600;
+    font-family: inherit;
     transition: border-color 0.15s, background 0.15s;
   }
   @media (hover: hover) {
-    .difficulty button:hover { border-color: var(--accent); }
+    .selector button:hover { border-color: var(--accent); }
   }
-  .difficulty button.selected { border-color: var(--accent); background: rgba(226,183,20,0.15); }
+  .selector button.selected { border-color: var(--accent); background: var(--accent-glow); }
 
   /* Results */
   .result-title { font-size: 1.6rem; font-weight: 700; }
@@ -249,7 +286,7 @@
   .countdown-overlay {
     position: fixed;
     inset: 0;
-    background: rgba(26,26,46,0.85);
+    background: rgba(30,30,46,0.85);
     display: none;
     align-items: center;
     justify-content: center;
@@ -268,7 +305,7 @@
     100% { transform: scale(1); opacity: 1; }
   }
 
-  /* Shake animation for wrong taps */
+  /* Shake animation for wrong taps (sting!) */
   @keyframes shake {
     0%, 100% { transform: translateX(0); }
     20% { transform: translateX(-4px); }
@@ -276,19 +313,19 @@
     60% { transform: translateX(-3px); }
     80% { transform: translateX(3px); }
   }
-  .tri.wrong { animation: shake 0.35s ease; }
+  .cell.wrong { animation: shake 0.35s ease; }
 
-  /* Pulse for correct */
+  /* Pulse for correct (pollinated!) */
   @keyframes pulse {
     0% { transform: scale(1); }
     50% { transform: scale(1.12); }
     100% { transform: scale(1); }
   }
-  .tri.correct { animation: pulse 0.3s ease; }
+  .cell.correct { animation: pulse 0.3s ease; }
 
-  .tri polygon,
+  .cell polygon,
   .btn,
-  .difficulty button {
+  .selector button {
     touch-action: manipulation;
   }
 
@@ -296,7 +333,7 @@
     min-height: 44px;
     min-width: 44px;
   }
-  .difficulty button {
+  .selector button {
     min-height: 44px;
     min-width: 44px;
   }
@@ -307,6 +344,15 @@
     color: var(--muted);
     font-size: 0.75rem;
     text-align: center;
+  }
+
+  .menu-label {
+    color: var(--muted);
+    font-size: 0.8rem;
+    margin-bottom: 0.4rem;
+    text-align: center;
+    text-transform: uppercase;
+    letter-spacing: 1px;
   }
 
   @media (max-width: 480px) {
@@ -337,38 +383,46 @@
 <body>
 
 <header>
-  <h1>THREE HIVE</h1>
-  <p>Tap multiples of 3 — drag to chain others that sum to 3!</p>
+  <h1>🍯 THREE HIVE 🐝</h1>
+  <p>Tap multiples of 3 — swarm the rest!</p>
 </header>
 
 <!-- MENU SCREEN -->
 <div id="menu-screen" class="screen active">
   <div style="margin-top:1rem;">
-    <p style="color:var(--muted);font-size:0.8rem;margin-bottom:0.4rem;text-align:center;">DIFFICULTY</p>
-    <div class="difficulty" id="diff-selector">
+    <p class="menu-label">Tile Shape</p>
+    <div class="selector" id="shape-selector">
+      <button data-shape="hex" class="selected">⬡ Hexagons</button>
+      <button data-shape="tri">△ Triangles</button>
+    </div>
+  </div>
+  <div style="margin-top:0.5rem;">
+    <p class="menu-label">Difficulty</p>
+    <div class="selector" id="diff-selector">
       <button data-diff="easy">Easy (36 s)</button>
       <button data-diff="medium" class="selected">Medium (24 s)</button>
       <button data-diff="hard">Hard (12 s)</button>
     </div>
   </div>
   <div style="margin-top:0.5rem;">
-    <p style="color:var(--muted);font-size:0.8rem;margin-bottom:0.4rem;text-align:center;">TRIANGLES</p>
-    <div class="difficulty" id="tri-selector">
-      <button data-tri="9">9</button>
-      <button data-tri="18" class="selected">18</button>
-      <button data-tri="27">27</button>
+    <p class="menu-label">Cells</p>
+    <div class="selector" id="count-selector">
+      <button data-count="9">9</button>
+      <button data-count="18" class="selected">18</button>
+      <button data-count="27">27</button>
     </div>
   </div>
-  <button class="btn" id="start-btn">START GAME</button>
+  <button class="btn" id="start-btn">🐝 START BUZZING</button>
   <div class="scores-panel" id="menu-scores"></div>
 </div>
 
 <!-- HUD (visible during game) -->
 <div class="hud" id="hud" style="display:none;">
-  <div class="hud-item"><div class="label">Time</div><div class="value timer" id="timer-display">10.0</div></div>
-  <div class="hud-item"><div class="label">Found</div><div class="value" id="found-display">0 / 0</div></div>
-  <div class="hud-item"><div class="label">Chains</div><div class="value" id="chains-display" style="color:#7c3aed;">0</div></div>
-  <div class="hud-item"><div class="label">Score</div><div class="value score" id="score-display">0</div></div>
+  <div class="hud-item"><div class="label">⏱ Time</div><div class="value timer" id="timer-display">10.0</div></div>
+  <div class="hud-item"><div class="label">🌸 Found</div><div class="value" id="found-display">0 / 0</div></div>
+  <div class="hud-item"><div class="label">🔗 Swarms</div><div class="value" id="chains-display" style="color:var(--connected);">0</div></div>
+  <div class="hud-item"><div class="label">🍯 Honey</div><div class="value score" id="score-display">0</div></div>
+  <div class="hud-item"><div class="buzz-badge" id="buzz-badge">🐝 x0</div></div>
 </div>
 
 <!-- GAME AREA -->
@@ -384,13 +438,13 @@
   <div class="result-title" id="result-title"></div>
   <div class="result-stats" id="result-stats"></div>
   <div style="display:flex;gap:0.6rem;flex-wrap:wrap;justify-content:center;">
-    <button class="btn" id="replay-btn">PLAY AGAIN</button>
+    <button class="btn" id="replay-btn">🐝 BUZZ AGAIN</button>
     <button class="btn btn-small" id="menu-btn" style="background:var(--card);color:var(--text);">MENU</button>
   </div>
   <div class="scores-panel" id="result-scores"></div>
 </div>
 
-<footer>Three Hive — Divisible by Three Challenge</footer>
+<footer>🍯 Three Hive — Buzz through the numbers!</footer>
 
 <script>
 (() => {
@@ -401,31 +455,31 @@
     hard:   { time: 12, numRange: [1, 33] },
   };
 
-  const TRIANGLE_COUNTS = [9, 18, 27];
-  let triangleCount = 18; // default
-
-  let TRI_W = 64;   // width of each triangle cell (computed dynamically)
-  let TRI_H = 56;   // height (computed dynamically)
-  const BONUS_STREAK = 3; // streak length for combo bonus
-
-  /* ── Chain scoring config ──────────────────── */
+  const BONUS_STREAK = 3;
   const CHAIN_POINTS = { 2: 150, 3: 250, 4: 400 };
 
   /* ── State ──────────────────────────────────── */
   let difficulty = 'medium';
+  let tileShape = 'hex';   // 'hex' or 'tri'
+  let cellCount = 18;
   let cells = [];       // { num, div3, el, row, col, picked, pairable }
   let totalDiv3 = 0;
   let foundCount = 0;
   let chainCount = 0;
+  let bestStreak = 0;
   let score = 0;
   let streak = 0;
   let timeLeft = 0;
   let timerInterval = null;
   let gameActive = false;
 
+  // Tile sizing (computed per game)
+  let TILE_W = 64;
+  let TILE_H = 56;
+
   /* ── Drag state ────────────────────────────── */
   let dragActive = false;
-  let dragChain = [];       // array of cell objects in chain
+  let dragChain = [];
   let dragPointerId = null;
   let dragStartX = 0;
   let dragStartY = 0;
@@ -450,16 +504,24 @@
   const foundDisp    = $('found-display');
   const chainsDisp   = $('chains-display');
   const scoreDisp    = $('score-display');
+  const buzzBadge    = $('buzz-badge');
 
-  /* ── Difficulty selector ────────────────────── */
-  const diffBtns = document.querySelectorAll('#diff-selector button');
-  diffBtns.forEach(btn => {
-    btn.addEventListener('click', () => {
-      diffBtns.forEach(b => b.classList.remove('selected'));
-      btn.classList.add('selected');
-      difficulty = btn.dataset.diff;
+  /* ── Selectors ──────────────────────────────── */
+  function wireSelector(id, cb) {
+    const btns = document.querySelectorAll(`#${id} button`);
+    btns.forEach(btn => {
+      btn.addEventListener('click', () => {
+        btns.forEach(b => b.classList.remove('selected'));
+        btn.classList.add('selected');
+        cb(btn);
+      });
     });
-  });
+    return btns;
+  }
+
+  const diffBtns = wireSelector('diff-selector', btn => { difficulty = btn.dataset.diff; });
+  wireSelector('shape-selector', btn => { tileShape = btn.dataset.shape; });
+  wireSelector('count-selector', btn => { cellCount = parseInt(btn.dataset.count, 10); });
 
   /* ── High scores (localStorage) ─────────────── */
   function getScores() {
@@ -477,63 +539,85 @@
   function renderScores(container, diff) {
     const all = getScores();
     const list = (all[diff] || []);
-    let html = `<h3>High Scores — ${diff}</h3>`;
+    let html = `<h3>🍯 High Scores — ${diff}</h3>`;
     if (list.length === 0) {
-      html += `<p class="empty-scores">No scores yet. Be the first!</p>`;
+      html += `<p class="empty-scores">No honey yet. Start buzzing!</p>`;
     } else {
       html += `<ul class="scores-list">`;
       list.forEach((entry, i) => {
-        html += `<li><span class="rank">${i + 1}.</span><span class="sname">${new Date(entry.date).toLocaleDateString()}</span><span class="sval">${entry.score}</span></li>`;
+        html += `<li><span class="rank">${i + 1}.</span><span class="sname">${new Date(entry.date).toLocaleDateString()}</span><span class="sval">${entry.score} 🍯</span></li>`;
       });
       html += `</ul>`;
     }
     container.innerHTML = html;
   }
 
-  /* ── Triangle SVG builder ───────────────────── */
-  function makeTri(num, pointsUp) {
+  /* ── SVG cell builders ─────────────────────── */
+  function makeTriSvg(num, pointsUp) {
     const svgNS = 'http://www.w3.org/2000/svg';
     const svg = document.createElementNS(svgNS, 'svg');
-    svg.setAttribute('width', TRI_W);
-    svg.setAttribute('height', TRI_H);
-    svg.setAttribute('viewBox', `0 0 ${TRI_W} ${TRI_H}`);
-    svg.classList.add('tri');
+    svg.setAttribute('width', TILE_W);
+    svg.setAttribute('height', TILE_H);
+    svg.setAttribute('viewBox', `0 0 ${TILE_W} ${TILE_H}`);
+    svg.classList.add('cell');
 
     const poly = document.createElementNS(svgNS, 'polygon');
     const pad = 3;
     let pts;
     if (pointsUp) {
-      pts = `${TRI_W / 2},${pad} ${TRI_W - pad},${TRI_H - pad} ${pad},${TRI_H - pad}`;
+      pts = `${TILE_W / 2},${pad} ${TILE_W - pad},${TILE_H - pad} ${pad},${TILE_H - pad}`;
     } else {
-      pts = `${pad},${pad} ${TRI_W - pad},${pad} ${TRI_W / 2},${TRI_H - pad}`;
+      pts = `${pad},${pad} ${TILE_W - pad},${pad} ${TILE_W / 2},${TILE_H - pad}`;
     }
     poly.setAttribute('points', pts);
     svg.appendChild(poly);
 
     const txt = document.createElementNS(svgNS, 'text');
-    txt.setAttribute('x', TRI_W / 2);
-    txt.setAttribute('y', pointsUp ? TRI_H * 0.62 : TRI_H * 0.42);
+    txt.setAttribute('x', TILE_W / 2);
+    txt.setAttribute('y', pointsUp ? TILE_H * 0.62 : TILE_H * 0.42);
     txt.setAttribute('text-anchor', 'middle');
     txt.setAttribute('dominant-baseline', 'central');
-    txt.setAttribute('font-size', Math.max(10, TRI_W * 0.25) + 'px');
+    txt.setAttribute('font-size', Math.max(10, TILE_W * 0.25) + 'px');
     txt.textContent = num;
     svg.appendChild(txt);
 
     return svg;
   }
 
-  /* ── Triangle selector ────────────────────────── */
-  const triBtns = document.querySelectorAll('#tri-selector button');
-  triBtns.forEach(btn => {
-    btn.addEventListener('click', () => {
-      triBtns.forEach(b => b.classList.remove('selected'));
-      btn.classList.add('selected');
-      triangleCount = parseInt(btn.dataset.tri, 10);
-    });
-  });
+  function makeHexSvg(num, radius) {
+    const svgNS = 'http://www.w3.org/2000/svg';
+    const size = radius * 2;
+    const svg = document.createElementNS(svgNS, 'svg');
+    svg.setAttribute('width', size);
+    svg.setAttribute('height', size);
+    svg.setAttribute('viewBox', `0 0 ${size} ${size}`);
+    svg.classList.add('cell');
 
-  /* ── Random layout generator ────────────────── */
-  function generateLayout(count) {
+    const poly = document.createElementNS(svgNS, 'polygon');
+    const pad = 2;
+    const r = radius - pad;
+    const pts = [];
+    for (let i = 0; i < 6; i++) {
+      const angle = (Math.PI / 3) * i - Math.PI / 6; // flat-top
+      pts.push(`${radius + r * Math.cos(angle)},${radius + r * Math.sin(angle)}`);
+    }
+    poly.setAttribute('points', pts.join(' '));
+    svg.appendChild(poly);
+
+    const txt = document.createElementNS(svgNS, 'text');
+    txt.setAttribute('x', radius);
+    txt.setAttribute('y', radius);
+    txt.setAttribute('text-anchor', 'middle');
+    txt.setAttribute('dominant-baseline', 'central');
+    txt.setAttribute('font-size', Math.max(10, radius * 0.55) + 'px');
+    txt.textContent = num;
+    svg.appendChild(txt);
+
+    return svg;
+  }
+
+  /* ── Organic layout generators ─────────────── */
+  function generateTriLayout(count) {
     const maxCols = 12;
     const maxRows = 8;
     const startR = Math.floor(maxRows / 2);
@@ -549,17 +633,13 @@
     while (positions.length < count && frontier.length > 0) {
       const idx = Math.floor(Math.random() * frontier.length);
       const [r, c] = frontier[idx];
-
       const neighbors = [
         [r, c - 1], [r, c + 1], [r - 1, c], [r + 1, c]
       ].filter(([nr, nc]) =>
         nr >= 0 && nr < maxRows && nc >= 0 && nc < maxCols && !used.has(key(nr, nc))
       );
 
-      if (neighbors.length === 0) {
-        frontier.splice(idx, 1);
-        continue;
-      }
+      if (neighbors.length === 0) { frontier.splice(idx, 1); continue; }
 
       const [nr, nc] = neighbors[Math.floor(Math.random() * neighbors.length)];
       used.add(key(nr, nc));
@@ -567,7 +647,46 @@
       frontier.push([nr, nc]);
     }
 
-    // Normalize so top-left is (0, 0)
+    const minR = Math.min(...positions.map(p => p[0]));
+    const minC = Math.min(...positions.map(p => p[1]));
+    return positions.map(([r, c]) => [r - minR, c - minC]);
+  }
+
+  function generateHexLayout(count) {
+    const maxCols = 10;
+    const maxRows = 8;
+    const startR = Math.floor(maxRows / 2);
+    const startC = Math.floor(maxCols / 2);
+
+    const positions = [];
+    const used = new Set();
+    const key = (r, c) => `${r},${c}`;
+    const frontier = [[startR, startC]];
+    used.add(key(startR, startC));
+    positions.push([startR, startC]);
+
+    while (positions.length < count && frontier.length > 0) {
+      const idx = Math.floor(Math.random() * frontier.length);
+      const [r, c] = frontier[idx];
+
+      // Hex neighbors (offset coords, even-r)
+      const isEven = r % 2 === 0;
+      const neighbors = isEven
+        ? [[r-1,c-1],[r-1,c],[r,c-1],[r,c+1],[r+1,c-1],[r+1,c]]
+        : [[r-1,c],[r-1,c+1],[r,c-1],[r,c+1],[r+1,c],[r+1,c+1]];
+
+      const valid = neighbors.filter(([nr, nc]) =>
+        nr >= 0 && nr < maxRows && nc >= 0 && nc < maxCols && !used.has(key(nr, nc))
+      );
+
+      if (valid.length === 0) { frontier.splice(idx, 1); continue; }
+
+      const [nr, nc] = valid[Math.floor(Math.random() * valid.length)];
+      used.add(key(nr, nc));
+      positions.push([nr, nc]);
+      frontier.push([nr, nc]);
+    }
+
     const minR = Math.min(...positions.map(p => p[0]));
     const minC = Math.min(...positions.map(p => p[1]));
     return positions.map(([r, c]) => [r - minR, c - minC]);
@@ -577,38 +696,25 @@
   function buildBoard() {
     const cfg = DIFFICULTIES[difficulty];
     const { numRange } = cfg;
-    const count = triangleCount;
+    const count = cellCount;
 
-    // Generate a random organic layout
-    const positions = generateLayout(count);
-    const maxCol = Math.max(...positions.map(p => p[1]));
-    const maxRow = Math.max(...positions.map(p => p[0]));
-    const cols = maxCol + 1;
-    const rows = maxRow + 1;
-
-    // Compute responsive triangle size based on available space
-    // Use visualViewport when available to account for browser zoom
     const vp = window.visualViewport;
     const vpW = vp ? vp.width : window.innerWidth;
     const vpH = vp ? vp.height : window.innerHeight;
-
     const paddingX = 16;
     const availW = vpW - paddingX;
-    const idealW = Math.floor(availW / (cols / 2 + 0.5));
-
-    const availH = vpH - 180; // leave room for header + HUD
-    const idealFromH = Math.round((availH / rows) * 64 / 56);
-
-    TRI_W = Math.min(90, Math.max(44, Math.min(idealW, idealFromH)));
-    TRI_H = Math.round(TRI_W * 56 / 64);
+    const availH = vpH - 180;
 
     gameContainer.innerHTML = '';
     cells = [];
     totalDiv3 = 0;
     foundCount = 0;
     chainCount = 0;
+    bestStreak = 0;
     score = 0;
     streak = 0;
+
+    // Generate numbers
     const pool = new Set();
     while (pool.size < count) {
       pool.add(Math.floor(Math.random() * (numRange[1] - numRange[0] + 1)) + numRange[0]);
@@ -636,32 +742,89 @@
       [nums[i], nums[j]] = [nums[j], nums[i]];
     }
 
-    // Compute board dimensions from layout
-    const boardW = (cols * TRI_W / 2) + TRI_W / 2;
-    const boardH = rows * TRI_H + 10;
-    gameContainer.style.width = boardW + 'px';
-    gameContainer.style.height = boardH + 'px';
+    let boardW, boardH;
 
-    // Place triangles at layout positions
-    positions.forEach(([r, c], i) => {
-      const pointsUp = (r + c) % 2 === 0;
-      const num = nums[i];
-      const div3 = num % 3 === 0;
-      if (div3) totalDiv3++;
+    if (tileShape === 'hex') {
+      const positions = generateHexLayout(count);
+      const maxCol = Math.max(...positions.map(p => p[1]));
+      const maxRow = Math.max(...positions.map(p => p[0]));
 
-      const el = makeTri(num, pointsUp);
+      // Compute hex radius from available space
+      const cols = maxCol + 1;
+      const rows = maxRow + 1;
+      const idealFromW = Math.floor(availW / (cols * 3 + 0.5)) * 2;
+      const idealFromH = Math.floor(availH / (rows * 0.88 + 0.5));
+      let hexR = Math.min(40, Math.max(22, Math.min(idealFromW, idealFromH) / 2));
+      hexR = Math.round(hexR);
 
-      const x = c * (TRI_W / 2);
-      const y = r * TRI_H;
-      el.style.left = x + 'px';
-      el.style.top = y + 'px';
+      const hexW = hexR * 2;
+      const hexH = Math.round(hexR * Math.sqrt(3));
+      TILE_W = hexW;
+      TILE_H = hexW; // hex SVG is square (2r x 2r)
 
-      const cell = { num, div3, el, row: r, col: c, picked: false, pairable: false };
-      el._cell = cell;
-      el.querySelector('polygon')._cell = cell;
-      cells.push(cell);
-      gameContainer.appendChild(el);
-    });
+      boardW = (maxCol + 1) * hexR * 3 + hexR * 2 + 10;
+      boardH = (maxRow + 1) * hexH * 0.88 + hexH + 10;
+      gameContainer.style.width = boardW + 'px';
+      gameContainer.style.height = boardH + 'px';
+
+      positions.forEach(([r, c], i) => {
+        const num = nums[i];
+        const div3 = num % 3 === 0;
+        if (div3) totalDiv3++;
+
+        const el = makeHexSvg(num, hexR);
+
+        const offset = (r % 2 === 1) ? hexR * 1.5 : 0;
+        const x = c * hexR * 3 + offset;
+        const y = r * hexH * 0.88;
+        el.style.left = x + 'px';
+        el.style.top = y + 'px';
+
+        const cell = { num, div3, el, row: r, col: c, picked: false, pairable: false, cx: x + hexR, cy: y + hexR };
+        el._cell = cell;
+        el.querySelector('polygon')._cell = cell;
+        cells.push(cell);
+        gameContainer.appendChild(el);
+      });
+
+    } else {
+      // Triangle mode
+      const positions = generateTriLayout(count);
+      const maxCol = Math.max(...positions.map(p => p[1]));
+      const maxRow = Math.max(...positions.map(p => p[0]));
+      const cols = maxCol + 1;
+      const rows = maxRow + 1;
+
+      const idealW = Math.floor(availW / (cols / 2 + 0.5));
+      const idealFromH = Math.round((availH / rows) * 64 / 56);
+      TILE_W = Math.min(90, Math.max(44, Math.min(idealW, idealFromH)));
+      TILE_H = Math.round(TILE_W * 56 / 64);
+
+      boardW = (cols * TILE_W / 2) + TILE_W / 2;
+      boardH = rows * TILE_H + 10;
+      gameContainer.style.width = boardW + 'px';
+      gameContainer.style.height = boardH + 'px';
+
+      positions.forEach(([r, c], i) => {
+        const pointsUp = (r + c) % 2 === 0;
+        const num = nums[i];
+        const div3 = num % 3 === 0;
+        if (div3) totalDiv3++;
+
+        const el = makeTriSvg(num, pointsUp);
+
+        const x = c * (TILE_W / 2);
+        const y = r * TILE_H;
+        el.style.left = x + 'px';
+        el.style.top = y + 'px';
+
+        const cell = { num, div3, el, row: r, col: c, picked: false, pairable: false, cx: x + TILE_W / 2, cy: y + TILE_H / 2 };
+        el._cell = cell;
+        el.querySelector('polygon')._cell = cell;
+        cells.push(cell);
+        gameContainer.appendChild(el);
+      });
+    }
 
     // Create SVG overlay for drag lines
     const svgNS = 'http://www.w3.org/2000/svg';
@@ -677,34 +840,26 @@
     sumIndicator.style.display = 'none';
     gameContainer.appendChild(sumIndicator);
 
-    // Mark pairable cells
     markPairableCells();
-
     updateHUD();
   }
 
   /* ── Pairable detection ─────────────────────── */
   function markPairableCells() {
     const nonDiv3 = cells.filter(c => !c.div3 && !c.picked);
-    // For each non-div3 cell, check if it can form a valid chain (2-4 tiles summing to mult of 3)
-    for (const cell of nonDiv3) {
-      cell.pairable = false;
-    }
-    // Check all pairs
+    for (const cell of nonDiv3) cell.pairable = false;
     for (let i = 0; i < nonDiv3.length; i++) {
       for (let j = i + 1; j < nonDiv3.length; j++) {
         if ((nonDiv3[i].num + nonDiv3[j].num) % 3 === 0) {
           nonDiv3[i].pairable = true;
           nonDiv3[j].pairable = true;
         }
-        // Check triples
         for (let k = j + 1; k < nonDiv3.length; k++) {
           if ((nonDiv3[i].num + nonDiv3[j].num + nonDiv3[k].num) % 3 === 0) {
             nonDiv3[i].pairable = true;
             nonDiv3[j].pairable = true;
             nonDiv3[k].pairable = true;
           }
-          // Check quads
           for (let l = k + 1; l < nonDiv3.length; l++) {
             if ((nonDiv3[i].num + nonDiv3[j].num + nonDiv3[k].num + nonDiv3[l].num) % 3 === 0) {
               nonDiv3[i].pairable = true;
@@ -720,9 +875,21 @@
 
   /* ── Cell center helper ────────────────────── */
   function getCellCenter(cell) {
-    const x = parseFloat(cell.el.style.left) + TRI_W / 2;
-    const y = parseFloat(cell.el.style.top) + TRI_H / 2;
-    return { x, y };
+    return { x: cell.cx, y: cell.cy };
+  }
+
+  /* ── Floating feedback text ────────────────── */
+  function showFloat(cell, text, color) {
+    const el = document.createElement('div');
+    el.className = 'float-text';
+    el.style.color = color;
+    el.textContent = text;
+    const ctr = getCellCenter(cell);
+    el.style.left = ctr.x + 'px';
+    el.style.top = (ctr.y - 20) + 'px';
+    el.style.transform = 'translateX(-50%)';
+    gameContainer.appendChild(el);
+    setTimeout(() => el.remove(), 800);
   }
 
   /* ── Cell click handler (for taps) ──────────── */
@@ -735,17 +902,18 @@
       cell.el.classList.add('correct');
       foundCount++;
       streak++;
+      if (streak > bestStreak) bestStreak = streak;
       let pts = 100;
       if (streak >= BONUS_STREAK) pts += 50 * (streak - BONUS_STREAK + 1);
       pts += Math.round(timeLeft * 10);
       score += pts;
+      showFloat(cell, `+${pts} 🍯`, 'var(--correct)');
 
       if (foundCount === totalDiv3) {
         endGame(true);
         return;
       }
     } else if (cell.pairable) {
-      // Non-div3 but pairable — ignore tap (no penalty)
       return;
     } else {
       cell.picked = true;
@@ -753,6 +921,7 @@
       cell.el.classList.add('wrong');
       streak = 0;
       score = Math.max(0, score - 50);
+      showFloat(cell, '⚡ Sting! -50', 'var(--wrong)');
     }
 
     updateHUD();
@@ -760,14 +929,12 @@
 
   /* ── Drag chain logic ──────────────────────── */
   function cellFromPoint(x, y) {
-    // Temporarily hide overlay to hit-test game tiles
     if (dragOverlaySvg) dragOverlaySvg.style.display = 'none';
     if (sumIndicator) sumIndicator.style.display = 'none';
     const el = document.elementFromPoint(x, y);
     if (dragOverlaySvg) dragOverlaySvg.style.display = '';
     if (sumIndicator && dragActive) sumIndicator.style.display = '';
     if (!el) return null;
-    // Check the element and its parent for _cell
     if (el._cell) return el._cell;
     if (el.parentElement && el.parentElement._cell) return el.parentElement._cell;
     return null;
@@ -779,7 +946,6 @@
       const ctr = getCellCenter(c);
       return `${ctr.x},${ctr.y}`;
     });
-    // Add cursor position relative to game container
     const rect = gameContainer.getBoundingClientRect();
     const cx = cursorX - rect.left;
     const cy = cursorY - rect.top;
@@ -815,7 +981,6 @@
 
     cell.el.classList.add('drag-source');
 
-    // Create polyline
     const svgNS = 'http://www.w3.org/2000/svg';
     dragPolyline = document.createElementNS(svgNS, 'polyline');
     dragOverlaySvg.appendChild(dragPolyline);
@@ -851,25 +1016,25 @@
     const isValid = dragChain.length >= 2 && sum % 3 === 0;
 
     if (isValid) {
-      // Success!
       const chainSize = dragChain.length;
       let pts = CHAIN_POINTS[chainSize] || 150;
       streak++;
+      if (streak > bestStreak) bestStreak = streak;
       if (streak >= BONUS_STREAK) pts += 50 * (streak - BONUS_STREAK + 1);
       pts += Math.round(timeLeft * 10);
       score += pts;
       chainCount++;
 
-      // Mark cells as connected
+      const label = chainSize === 2 ? 'Pair' : chainSize === 3 ? 'Swarm x3' : 'Swarm x4!';
+      showFloat(dragChain[0], `🐝 ${label} +${pts} 🍯`, 'var(--connected)');
+
       dragChain.forEach(c => {
         c.picked = true;
         c.el.classList.remove('drag-source', 'chain-member');
         c.el.classList.add('connected', 'disabled');
       });
 
-      // Leave permanent polyline
       if (dragPolyline) {
-        // Remove cursor point — set final points to just cell centers
         const points = dragChain.map(c => {
           const ctr = getCellCenter(c);
           return `${ctr.x},${ctr.y}`;
@@ -879,39 +1044,25 @@
         dragPolyline = null;
       }
 
-      // Re-evaluate pairable after removing cells
       markPairableCells();
     } else if (dragChain.length >= 2) {
-      // Failed chain attempt
       streak = 0;
       score = Math.max(0, score - 50);
+      showFloat(dragChain[0], '⚡ Bad swarm! -50', 'var(--wrong)');
 
-      // Flash wrong on chain cells
       dragChain.forEach(c => {
         c.el.classList.remove('drag-source', 'chain-member');
         c.el.classList.add('wrong');
         setTimeout(() => c.el.classList.remove('wrong'), 400);
       });
 
-      // Remove temp polyline
-      if (dragPolyline) {
-        dragPolyline.remove();
-        dragPolyline = null;
-      }
+      if (dragPolyline) { dragPolyline.remove(); dragPolyline = null; }
     } else {
-      // Single cell — clean up drag visuals only
-      dragChain.forEach(c => {
-        c.el.classList.remove('drag-source', 'chain-member');
-      });
-      if (dragPolyline) {
-        dragPolyline.remove();
-        dragPolyline = null;
-      }
+      dragChain.forEach(c => c.el.classList.remove('drag-source', 'chain-member'));
+      if (dragPolyline) { dragPolyline.remove(); dragPolyline = null; }
     }
 
-    // Hide sum indicator
     if (sumIndicator) sumIndicator.style.display = 'none';
-
     dragChain = [];
     dragStartCell = null;
     lastHoveredCell = null;
@@ -928,7 +1079,6 @@
     gameContainer.setPointerCapture(e.pointerId);
 
     if (cell.div3) {
-      // For div3 cells, record start for tap detection
       dragStartX = e.clientX;
       dragStartY = e.clientY;
       dragStartTime = Date.now();
@@ -936,7 +1086,6 @@
       dragPointerId = e.pointerId;
       dragActive = false;
     } else {
-      // Non-div3: start chain drag
       startDrag(cell, e);
     }
   });
@@ -948,39 +1097,26 @@
     cursorX = e.clientX;
     cursorY = e.clientY;
 
-    if (!dragActive && dragStartCell && dragStartCell.div3) {
-      // If dragging started on a div3 cell, don't do chain logic
-      return;
-    }
-
+    if (!dragActive && dragStartCell && dragStartCell.div3) return;
     if (!dragActive) return;
 
     updateDragPolyline();
     updateSumIndicator();
 
-    // Release capture briefly to detect element under cursor
     gameContainer.releasePointerCapture(e.pointerId);
     const cell = cellFromPoint(e.clientX, e.clientY);
     gameContainer.setPointerCapture(e.pointerId);
 
-    if (!cell || cell.picked || cell.div3) {
-      lastHoveredCell = null;
-      return;
-    }
-
+    if (!cell || cell.picked || cell.div3) { lastHoveredCell = null; return; }
     if (cell === lastHoveredCell) return;
     lastHoveredCell = cell;
 
-    // Check if this is the second-to-last cell in chain (undo)
     if (dragChain.length >= 2 && cell === dragChain[dragChain.length - 2]) {
       removeLastFromChain();
       return;
     }
 
-    // Add to chain if not already in it
-    if (!dragChain.includes(cell)) {
-      addToChain(cell);
-    }
+    if (!dragChain.includes(cell)) addToChain(cell);
   });
 
   gameContainer.addEventListener('pointerup', (e) => {
@@ -995,30 +1131,21 @@
     const duration = Date.now() - dragStartTime;
 
     if (dragStartCell && dragStartCell.div3 && !dragActive) {
-      // Tap on div3 cell
-      if (dist < 10 && duration < 300) {
-        onCellClick(dragStartCell);
-      }
+      if (dist < 10 && duration < 300) onCellClick(dragStartCell);
       dragStartCell = null;
       dragPointerId = null;
       return;
     }
 
     if (dragActive && dragChain.length === 1 && dist < 10 && duration < 300) {
-      // Short tap on non-div3 cell
       const cell = dragChain[0];
-      // Clean up drag visuals
       cell.el.classList.remove('drag-source');
       if (dragPolyline) { dragPolyline.remove(); dragPolyline = null; }
       if (sumIndicator) sumIndicator.style.display = 'none';
       dragActive = false;
       dragChain = [];
 
-      if (!cell.pairable) {
-        // Non-pairable non-div3: penalize
-        onCellClick(cell);
-      }
-      // else: pairable — ignore
+      if (!cell.pairable) onCellClick(cell);
       dragStartCell = null;
       dragPointerId = null;
       return;
@@ -1040,6 +1167,13 @@
     foundDisp.textContent = `${foundCount} / ${totalDiv3}`;
     chainsDisp.textContent = chainCount;
     scoreDisp.textContent = score;
+
+    if (streak >= BONUS_STREAK) {
+      buzzBadge.textContent = `🐝 x${streak} Buzz!`;
+      buzzBadge.classList.add('active');
+    } else {
+      buzzBadge.classList.remove('active');
+    }
   }
 
   /* ── Timer ──────────────────────────────────── */
@@ -1057,7 +1191,6 @@
         return;
       }
       timerDisp.textContent = timeLeft.toFixed(1);
-      // Color warning
       if (timeLeft <= 3) timerDisp.style.color = 'var(--wrong)';
       else timerDisp.style.color = '';
     }, 100);
@@ -1072,14 +1205,10 @@
     const tick = () => {
       count--;
       if (count === 0) {
-        countdownNumber.textContent = 'GO!';
-        setTimeout(() => {
-          countdownOverlay.classList.remove('active');
-          cb();
-        }, 400);
+        countdownNumber.textContent = '🐝 GO!';
+        setTimeout(() => { countdownOverlay.classList.remove('active'); cb(); }, 400);
       } else {
         countdownNumber.textContent = count;
-        // Re-trigger animation
         countdownNumber.style.animation = 'none';
         void countdownNumber.offsetHeight;
         countdownNumber.style.animation = '';
@@ -1099,9 +1228,7 @@
     hud.style.display = 'flex';
     gameContainer.style.display = 'block';
 
-    // Disable clicks during countdown
     gameActive = false;
-
     doCountdown(() => {
       gameActive = true;
       startTimer();
@@ -1112,7 +1239,6 @@
     gameActive = false;
     clearInterval(timerInterval);
 
-    // Cancel any active drag
     if (dragActive) {
       dragChain.forEach(c => c.el.classList.remove('drag-source', 'chain-member'));
       if (dragPolyline) { dragPolyline.remove(); dragPolyline = null; }
@@ -1122,21 +1248,17 @@
       dragPointerId = null;
     }
 
-    // Reveal unfound div3 cells
     cells.forEach(c => {
       if (c.div3 && !c.picked) c.el.classList.add('reveal');
       c.el.classList.add('disabled');
     });
 
-    // Bonus for finding all
     if (allFound) {
-      score += Math.round(timeLeft * 100); // big time bonus
+      score += Math.round(timeLeft * 100);
     }
     updateHUD();
-
     saveScore(difficulty, score);
 
-    // Show result after a short delay so player sees the reveal
     setTimeout(() => {
       document.body.classList.remove('game-active');
       hud.style.display = 'none';
@@ -1144,20 +1266,21 @@
 
       const pct = totalDiv3 > 0 ? Math.round((foundCount / totalDiv3) * 100) : 0;
       let title;
-      if (allFound) title = 'PERFECT!';
-      else if (pct >= 75) title = 'GREAT JOB!';
-      else if (pct >= 50) title = 'NOT BAD!';
-      else title = 'KEEP TRYING!';
+      if (allFound) title = '👑 QUEEN BEE!';
+      else if (pct >= 75) title = '🐝 GREAT BUZZ!';
+      else if (pct >= 50) title = '🍯 NOT BAD!';
+      else title = '😵 STUNG OUT!';
 
       $('result-title').textContent = title;
       $('result-title').style.color = allFound ? 'var(--correct)' : (pct >= 50 ? 'var(--accent)' : 'var(--wrong)');
 
       $('result-stats').innerHTML = `
-        Found <span>${foundCount}</span> of <span>${totalDiv3}</span> divisible-by-3 numbers<br>
-        ${chainCount > 0 ? `Chains: <span style="color:#7c3aed">${chainCount}</span><br>` : ''}
-        Final Score: <span style="color:var(--correct)">${score}</span><br>
+        Pollinated <span>${foundCount}</span> of <span>${totalDiv3}</span> flowers 🌸<br>
+        ${chainCount > 0 ? `Swarms: <span style="color:var(--connected)">${chainCount}</span> 🔗<br>` : ''}
+        ${bestStreak >= BONUS_STREAK ? `Best Buzz: <span style="color:var(--accent)">🐝 x${bestStreak}</span><br>` : ''}
+        Honey: <span style="color:var(--correct)">${score} 🍯</span><br>
         Difficulty: <span>${difficulty}</span>
-        ${allFound ? `<br>Time remaining bonus: <span>+${Math.round(timeLeft * 100)}</span>` : ''}
+        ${allFound ? `<br>Time bonus: <span style="color:var(--accent)">+${Math.round(timeLeft * 100)} 🍯</span>` : ''}
       `;
 
       renderScores($('result-scores'), difficulty);
@@ -1178,7 +1301,6 @@
 
   /* ── Init ───────────────────────────────────── */
   renderScores($('menu-scores'), difficulty);
-  // Update scores panel when difficulty changes
   diffBtns.forEach(btn => {
     btn.addEventListener('click', () => renderScores($('menu-scores'), btn.dataset.diff));
   });
