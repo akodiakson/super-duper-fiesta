@@ -460,24 +460,70 @@
     });
   });
 
+  /* ── Random layout generator ────────────────── */
+  function generateLayout(count) {
+    const maxCols = 12;
+    const maxRows = 8;
+    const startR = Math.floor(maxRows / 2);
+    const startC = Math.floor(maxCols / 2);
+
+    const positions = [];
+    const used = new Set();
+    const key = (r, c) => `${r},${c}`;
+    const frontier = [[startR, startC]];
+    used.add(key(startR, startC));
+    positions.push([startR, startC]);
+
+    while (positions.length < count && frontier.length > 0) {
+      const idx = Math.floor(Math.random() * frontier.length);
+      const [r, c] = frontier[idx];
+
+      const neighbors = [
+        [r, c - 1], [r, c + 1], [r - 1, c], [r + 1, c]
+      ].filter(([nr, nc]) =>
+        nr >= 0 && nr < maxRows && nc >= 0 && nc < maxCols && !used.has(key(nr, nc))
+      );
+
+      if (neighbors.length === 0) {
+        frontier.splice(idx, 1);
+        continue;
+      }
+
+      const [nr, nc] = neighbors[Math.floor(Math.random() * neighbors.length)];
+      used.add(key(nr, nc));
+      positions.push([nr, nc]);
+      frontier.push([nr, nc]);
+    }
+
+    // Normalize so top-left is (0, 0)
+    const minR = Math.min(...positions.map(p => p[0]));
+    const minC = Math.min(...positions.map(p => p[1]));
+    return positions.map(([r, c]) => [r - minR, c - minC]);
+  }
+
   /* ── Board generation ───────────────────────── */
   function buildBoard() {
     const cfg = DIFFICULTIES[difficulty];
     const { numRange } = cfg;
-    // Compute a grid layout for the chosen triangle count
     const count = triangleCount;
-    let cols, rows;
-    if (count === 9) { cols = 5; rows = 2; }       // 5*2 = 10 slots, we use 9
-    else if (count === 18) { cols = 6; rows = 3; }  // 6*3 = 18
-    else { cols = 9; rows = 3; }                     // 9*3 = 27
 
-    // Compute responsive triangle size based on available width
-    const padding = 16; // 8px on each side
-    const availW = window.innerWidth - padding;
-    // Board width formula: (cols/2 + 0.5) * TRI_W = availW → TRI_W = availW / (cols/2 + 0.5)
+    // Generate a random organic layout
+    const positions = generateLayout(count);
+    const maxCol = Math.max(...positions.map(p => p[1]));
+    const maxRow = Math.max(...positions.map(p => p[0]));
+    const cols = maxCol + 1;
+    const rows = maxRow + 1;
+
+    // Compute responsive triangle size based on available space
+    const paddingX = 16;
+    const availW = window.innerWidth - paddingX;
     const idealW = Math.floor(availW / (cols / 2 + 0.5));
-    TRI_W = Math.min(64, Math.max(44, idealW)); // clamp: min 44px touch target, max 64px
-    TRI_H = Math.round(TRI_W * 56 / 64); // maintain aspect ratio
+
+    const availH = window.innerHeight - 180; // leave room for header + HUD
+    const idealFromH = Math.round((availH / rows) * 64 / 56);
+
+    TRI_W = Math.min(90, Math.max(44, Math.min(idealW, idealFromH)));
+    TRI_H = Math.round(TRI_W * 56 / 64);
 
     gameContainer.innerHTML = '';
     cells = [];
@@ -497,7 +543,6 @@
     let idx = 0;
     while (div3Count < minDiv3 && idx < nums.length) {
       if (nums[idx] % 3 !== 0) {
-        // Replace with a multiple of 3
         let replacement;
         do { replacement = (Math.floor(Math.random() * 33) + 1) * 3; }
         while (nums.includes(replacement));
@@ -513,37 +558,32 @@
       [nums[i], nums[j]] = [nums[j], nums[i]];
     }
 
-    // Layout: honeycomb-style rows of alternating up/down triangles
+    // Compute board dimensions from layout
     const boardW = (cols * TRI_W / 2) + TRI_W / 2;
     const boardH = rows * TRI_H + 10;
     gameContainer.style.width = boardW + 'px';
     gameContainer.style.height = boardH + 'px';
 
-    let numIdx = 0;
-    for (let r = 0; r < rows; r++) {
-      for (let c = 0; c < cols; c++) {
-        if (numIdx >= count) break;
-        const pointsUp = (r + c) % 2 === 0;
-        const num = nums[numIdx++];
-        const div3 = num % 3 === 0;
-        if (div3) totalDiv3++;
+    // Place triangles at layout positions
+    positions.forEach(([r, c], i) => {
+      const pointsUp = (r + c) % 2 === 0;
+      const num = nums[i];
+      const div3 = num % 3 === 0;
+      if (div3) totalDiv3++;
 
-        const el = makeTri(num, pointsUp);
+      const el = makeTri(num, pointsUp);
 
-        // Position
-        const x = c * (TRI_W / 2);
-        const y = r * TRI_H;
-        el.style.left = x + 'px';
-        el.style.top = y + 'px';
+      const x = c * (TRI_W / 2);
+      const y = r * TRI_H;
+      el.style.left = x + 'px';
+      el.style.top = y + 'px';
 
-        const cell = { num, div3, el, row: r, col: c, picked: false };
-        cells.push(cell);
+      const cell = { num, div3, el, row: r, col: c, picked: false };
+      cells.push(cell);
 
-        // Attach click to polygon for accurate touch targets
-        el.querySelector('polygon').addEventListener('click', () => onCellClick(cell));
-        gameContainer.appendChild(el);
-      }
-    }
+      el.querySelector('polygon').addEventListener('click', () => onCellClick(cell));
+      gameContainer.appendChild(el);
+    });
 
     updateHUD();
   }
