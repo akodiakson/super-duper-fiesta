@@ -77,7 +77,47 @@
   .game-container {
     position: relative;
     margin: 0.5rem auto;
+    touch-action: none;
   }
+
+  .drag-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    z-index: 50;
+  }
+  .drag-overlay polyline {
+    fill: none;
+    stroke: var(--accent);
+    stroke-width: 3;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    filter: drop-shadow(0 0 6px var(--accent));
+  }
+  .drag-overlay polyline.chain-success {
+    stroke: #7c3aed;
+    stroke-width: 2.5;
+    filter: drop-shadow(0 0 4px #7c3aed);
+    opacity: 0.7;
+  }
+
+  .chain-sum-indicator {
+    position: absolute;
+    background: rgba(26,26,46,0.9);
+    color: var(--accent);
+    font-size: 0.8rem;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 6px;
+    pointer-events: none;
+    z-index: 55;
+    white-space: nowrap;
+  }
+  .chain-sum-indicator.valid { color: var(--correct); }
+  .chain-sum-indicator.invalid { color: var(--wrong); }
 
   /* Triangle cell */
   .tri {
@@ -105,6 +145,15 @@
   .tri.correct polygon { fill: var(--correct); }
   .tri.wrong polygon { fill: var(--wrong); }
   .tri.reveal polygon { fill: rgba(14,155,88,0.3); stroke: var(--correct); stroke-width: 2.5; stroke-dasharray: 5 3; }
+  .tri.connected polygon { fill: #7c3aed; }
+  .tri.drag-source polygon { fill: var(--accent); }
+  .tri.chain-member polygon { fill: #c084fc; }
+
+  @keyframes chainPulse {
+    0%, 100% { filter: brightness(1); }
+    50% { filter: brightness(1.4); }
+  }
+  .tri.drag-target-valid polygon { animation: chainPulse 0.8s ease infinite; }
 
   .tri text {
     fill: #fff;
@@ -289,7 +338,7 @@
 
 <header>
   <h1>THREE HIVE</h1>
-  <p>Tap every number divisible by 3 — before time runs out!</p>
+  <p>Tap multiples of 3 — drag to chain others that sum to 3!</p>
 </header>
 
 <!-- MENU SCREEN -->
@@ -318,6 +367,7 @@
 <div class="hud" id="hud" style="display:none;">
   <div class="hud-item"><div class="label">Time</div><div class="value timer" id="timer-display">10.0</div></div>
   <div class="hud-item"><div class="label">Found</div><div class="value" id="found-display">0 / 0</div></div>
+  <div class="hud-item"><div class="label">Chains</div><div class="value" id="chains-display" style="color:#7c3aed;">0</div></div>
   <div class="hud-item"><div class="label">Score</div><div class="value score" id="score-display">0</div></div>
 </div>
 
@@ -346,9 +396,9 @@
 (() => {
   /* ── Config ─────────────────────────────────── */
   const DIFFICULTIES = {
-    easy:   { time: 36, numRange: [1, 60] },
-    medium: { time: 24, numRange: [1, 90] },
-    hard:   { time: 12, numRange: [1, 99] },
+    easy:   { time: 36, numRange: [1, 33] },
+    medium: { time: 24, numRange: [1, 33] },
+    hard:   { time: 12, numRange: [1, 33] },
   };
 
   const TRIANGLE_COUNTS = [9, 18, 27];
@@ -358,16 +408,35 @@
   let TRI_H = 56;   // height (computed dynamically)
   const BONUS_STREAK = 3; // streak length for combo bonus
 
+  /* ── Chain scoring config ──────────────────── */
+  const CHAIN_POINTS = { 2: 150, 3: 250, 4: 400 };
+
   /* ── State ──────────────────────────────────── */
   let difficulty = 'medium';
-  let cells = [];       // { num, div3, el, row, col, picked }
+  let cells = [];       // { num, div3, el, row, col, picked, pairable }
   let totalDiv3 = 0;
   let foundCount = 0;
+  let chainCount = 0;
   let score = 0;
   let streak = 0;
   let timeLeft = 0;
   let timerInterval = null;
   let gameActive = false;
+
+  /* ── Drag state ────────────────────────────── */
+  let dragActive = false;
+  let dragChain = [];       // array of cell objects in chain
+  let dragPointerId = null;
+  let dragStartX = 0;
+  let dragStartY = 0;
+  let dragStartTime = 0;
+  let dragStartCell = null;
+  let lastHoveredCell = null;
+  let dragOverlaySvg = null;
+  let dragPolyline = null;
+  let sumIndicator = null;
+  let cursorX = 0;
+  let cursorY = 0;
 
   /* ── DOM refs ───────────────────────────────── */
   const $ = id => document.getElementById(id);
@@ -379,6 +448,7 @@
   const countdownNumber  = $('countdown-number');
   const timerDisp    = $('timer-display');
   const foundDisp    = $('found-display');
+  const chainsDisp   = $('chains-display');
   const scoreDisp    = $('score-display');
 
   /* ── Difficulty selector ────────────────────── */
@@ -536,6 +606,7 @@
     cells = [];
     totalDiv3 = 0;
     foundCount = 0;
+    chainCount = 0;
     score = 0;
     streak = 0;
     const pool = new Set();
@@ -551,7 +622,7 @@
     while (div3Count < minDiv3 && idx < nums.length) {
       if (nums[idx] % 3 !== 0) {
         let replacement;
-        do { replacement = (Math.floor(Math.random() * 33) + 1) * 3; }
+        do { replacement = (Math.floor(Math.random() * 11) + 1) * 3; }
         while (nums.includes(replacement));
         nums[idx] = replacement;
         div3Count++;
@@ -585,38 +656,100 @@
       el.style.left = x + 'px';
       el.style.top = y + 'px';
 
-      const cell = { num, div3, el, row: r, col: c, picked: false };
+      const cell = { num, div3, el, row: r, col: c, picked: false, pairable: false };
+      el._cell = cell;
+      el.querySelector('polygon')._cell = cell;
       cells.push(cell);
-
-      el.querySelector('polygon').addEventListener('click', () => onCellClick(cell));
       gameContainer.appendChild(el);
     });
+
+    // Create SVG overlay for drag lines
+    const svgNS = 'http://www.w3.org/2000/svg';
+    dragOverlaySvg = document.createElementNS(svgNS, 'svg');
+    dragOverlaySvg.classList.add('drag-overlay');
+    dragOverlaySvg.setAttribute('width', boardW);
+    dragOverlaySvg.setAttribute('height', boardH);
+    gameContainer.appendChild(dragOverlaySvg);
+
+    // Create sum indicator
+    sumIndicator = document.createElement('div');
+    sumIndicator.className = 'chain-sum-indicator';
+    sumIndicator.style.display = 'none';
+    gameContainer.appendChild(sumIndicator);
+
+    // Mark pairable cells
+    markPairableCells();
 
     updateHUD();
   }
 
-  /* ── Cell click handler ─────────────────────── */
+  /* ── Pairable detection ─────────────────────── */
+  function markPairableCells() {
+    const nonDiv3 = cells.filter(c => !c.div3 && !c.picked);
+    // For each non-div3 cell, check if it can form a valid chain (2-4 tiles summing to mult of 3)
+    for (const cell of nonDiv3) {
+      cell.pairable = false;
+    }
+    // Check all pairs
+    for (let i = 0; i < nonDiv3.length; i++) {
+      for (let j = i + 1; j < nonDiv3.length; j++) {
+        if ((nonDiv3[i].num + nonDiv3[j].num) % 3 === 0) {
+          nonDiv3[i].pairable = true;
+          nonDiv3[j].pairable = true;
+        }
+        // Check triples
+        for (let k = j + 1; k < nonDiv3.length; k++) {
+          if ((nonDiv3[i].num + nonDiv3[j].num + nonDiv3[k].num) % 3 === 0) {
+            nonDiv3[i].pairable = true;
+            nonDiv3[j].pairable = true;
+            nonDiv3[k].pairable = true;
+          }
+          // Check quads
+          for (let l = k + 1; l < nonDiv3.length; l++) {
+            if ((nonDiv3[i].num + nonDiv3[j].num + nonDiv3[k].num + nonDiv3[l].num) % 3 === 0) {
+              nonDiv3[i].pairable = true;
+              nonDiv3[j].pairable = true;
+              nonDiv3[k].pairable = true;
+              nonDiv3[l].pairable = true;
+            }
+          }
+        }
+      }
+    }
+  }
+
+  /* ── Cell center helper ────────────────────── */
+  function getCellCenter(cell) {
+    const x = parseFloat(cell.el.style.left) + TRI_W / 2;
+    const y = parseFloat(cell.el.style.top) + TRI_H / 2;
+    return { x, y };
+  }
+
+  /* ── Cell click handler (for taps) ──────────── */
   function onCellClick(cell) {
     if (!gameActive || cell.picked) return;
-    cell.picked = true;
-    cell.el.classList.add('disabled');
 
     if (cell.div3) {
+      cell.picked = true;
+      cell.el.classList.add('disabled');
       cell.el.classList.add('correct');
       foundCount++;
       streak++;
       let pts = 100;
-      if (streak >= BONUS_STREAK) pts += 50 * (streak - BONUS_STREAK + 1); // combo
-      // Time bonus: more time left = more points
+      if (streak >= BONUS_STREAK) pts += 50 * (streak - BONUS_STREAK + 1);
       pts += Math.round(timeLeft * 10);
       score += pts;
 
       if (foundCount === totalDiv3) {
-        // Perfect — found them all!
         endGame(true);
         return;
       }
+    } else if (cell.pairable) {
+      // Non-div3 but pairable — ignore tap (no penalty)
+      return;
     } else {
+      cell.picked = true;
+      cell.el.classList.add('disabled');
       cell.el.classList.add('wrong');
       streak = 0;
       score = Math.max(0, score - 50);
@@ -625,9 +758,287 @@
     updateHUD();
   }
 
+  /* ── Drag chain logic ──────────────────────── */
+  function cellFromPoint(x, y) {
+    // Temporarily hide overlay to hit-test game tiles
+    if (dragOverlaySvg) dragOverlaySvg.style.display = 'none';
+    if (sumIndicator) sumIndicator.style.display = 'none';
+    const el = document.elementFromPoint(x, y);
+    if (dragOverlaySvg) dragOverlaySvg.style.display = '';
+    if (sumIndicator && dragActive) sumIndicator.style.display = '';
+    if (!el) return null;
+    // Check the element and its parent for _cell
+    if (el._cell) return el._cell;
+    if (el.parentElement && el.parentElement._cell) return el.parentElement._cell;
+    return null;
+  }
+
+  function updateDragPolyline() {
+    if (!dragPolyline || dragChain.length === 0) return;
+    const points = dragChain.map(c => {
+      const ctr = getCellCenter(c);
+      return `${ctr.x},${ctr.y}`;
+    });
+    // Add cursor position relative to game container
+    const rect = gameContainer.getBoundingClientRect();
+    const cx = cursorX - rect.left;
+    const cy = cursorY - rect.top;
+    points.push(`${cx},${cy}`);
+    dragPolyline.setAttribute('points', points.join(' '));
+  }
+
+  function updateSumIndicator() {
+    if (!sumIndicator || dragChain.length === 0) return;
+    const sum = dragChain.reduce((s, c) => s + c.num, 0);
+    const rect = gameContainer.getBoundingClientRect();
+    sumIndicator.textContent = `Sum: ${sum}${dragChain.length >= 2 ? (sum % 3 === 0 ? ' \u2713' : '') : ''}`;
+    sumIndicator.className = 'chain-sum-indicator';
+    if (dragChain.length >= 2) {
+      sumIndicator.classList.add(sum % 3 === 0 ? 'valid' : 'invalid');
+    }
+    sumIndicator.style.left = (cursorX - rect.left + 15) + 'px';
+    sumIndicator.style.top = (cursorY - rect.top - 25) + 'px';
+    sumIndicator.style.display = '';
+  }
+
+  function startDrag(cell, e) {
+    dragActive = true;
+    dragChain = [cell];
+    dragPointerId = e.pointerId;
+    dragStartX = e.clientX;
+    dragStartY = e.clientY;
+    dragStartTime = Date.now();
+    dragStartCell = cell;
+    cursorX = e.clientX;
+    cursorY = e.clientY;
+    lastHoveredCell = cell;
+
+    cell.el.classList.add('drag-source');
+
+    // Create polyline
+    const svgNS = 'http://www.w3.org/2000/svg';
+    dragPolyline = document.createElementNS(svgNS, 'polyline');
+    dragOverlaySvg.appendChild(dragPolyline);
+    updateDragPolyline();
+    sumIndicator.style.display = '';
+    updateSumIndicator();
+  }
+
+  function addToChain(cell) {
+    if (dragChain.includes(cell)) return;
+    if (dragChain.length >= 4) return;
+    if (cell.picked || cell.div3) return;
+
+    dragChain.push(cell);
+    cell.el.classList.add('chain-member');
+    updateDragPolyline();
+    updateSumIndicator();
+  }
+
+  function removeLastFromChain() {
+    if (dragChain.length <= 1) return;
+    const removed = dragChain.pop();
+    removed.el.classList.remove('chain-member');
+    updateDragPolyline();
+    updateSumIndicator();
+  }
+
+  function endDrag() {
+    if (!dragActive) return;
+    dragActive = false;
+
+    const sum = dragChain.reduce((s, c) => s + c.num, 0);
+    const isValid = dragChain.length >= 2 && sum % 3 === 0;
+
+    if (isValid) {
+      // Success!
+      const chainSize = dragChain.length;
+      let pts = CHAIN_POINTS[chainSize] || 150;
+      streak++;
+      if (streak >= BONUS_STREAK) pts += 50 * (streak - BONUS_STREAK + 1);
+      pts += Math.round(timeLeft * 10);
+      score += pts;
+      chainCount++;
+
+      // Mark cells as connected
+      dragChain.forEach(c => {
+        c.picked = true;
+        c.el.classList.remove('drag-source', 'chain-member');
+        c.el.classList.add('connected', 'disabled');
+      });
+
+      // Leave permanent polyline
+      if (dragPolyline) {
+        // Remove cursor point — set final points to just cell centers
+        const points = dragChain.map(c => {
+          const ctr = getCellCenter(c);
+          return `${ctr.x},${ctr.y}`;
+        });
+        dragPolyline.setAttribute('points', points.join(' '));
+        dragPolyline.classList.add('chain-success');
+        dragPolyline = null;
+      }
+
+      // Re-evaluate pairable after removing cells
+      markPairableCells();
+    } else if (dragChain.length >= 2) {
+      // Failed chain attempt
+      streak = 0;
+      score = Math.max(0, score - 50);
+
+      // Flash wrong on chain cells
+      dragChain.forEach(c => {
+        c.el.classList.remove('drag-source', 'chain-member');
+        c.el.classList.add('wrong');
+        setTimeout(() => c.el.classList.remove('wrong'), 400);
+      });
+
+      // Remove temp polyline
+      if (dragPolyline) {
+        dragPolyline.remove();
+        dragPolyline = null;
+      }
+    } else {
+      // Single cell — clean up drag visuals only
+      dragChain.forEach(c => {
+        c.el.classList.remove('drag-source', 'chain-member');
+      });
+      if (dragPolyline) {
+        dragPolyline.remove();
+        dragPolyline = null;
+      }
+    }
+
+    // Hide sum indicator
+    if (sumIndicator) sumIndicator.style.display = 'none';
+
+    dragChain = [];
+    dragStartCell = null;
+    lastHoveredCell = null;
+    updateHUD();
+  }
+
+  /* ── Pointer event handlers ────────────────── */
+  gameContainer.addEventListener('pointerdown', (e) => {
+    if (!gameActive) return;
+    const cell = cellFromPoint(e.clientX, e.clientY);
+    if (!cell || cell.picked) return;
+
+    e.preventDefault();
+    gameContainer.setPointerCapture(e.pointerId);
+
+    if (cell.div3) {
+      // For div3 cells, record start for tap detection
+      dragStartX = e.clientX;
+      dragStartY = e.clientY;
+      dragStartTime = Date.now();
+      dragStartCell = cell;
+      dragPointerId = e.pointerId;
+      dragActive = false;
+    } else {
+      // Non-div3: start chain drag
+      startDrag(cell, e);
+    }
+  });
+
+  gameContainer.addEventListener('pointermove', (e) => {
+    if (!gameActive) return;
+    if (dragPointerId !== e.pointerId) return;
+
+    cursorX = e.clientX;
+    cursorY = e.clientY;
+
+    if (!dragActive && dragStartCell && dragStartCell.div3) {
+      // If dragging started on a div3 cell, don't do chain logic
+      return;
+    }
+
+    if (!dragActive) return;
+
+    updateDragPolyline();
+    updateSumIndicator();
+
+    // Release capture briefly to detect element under cursor
+    gameContainer.releasePointerCapture(e.pointerId);
+    const cell = cellFromPoint(e.clientX, e.clientY);
+    gameContainer.setPointerCapture(e.pointerId);
+
+    if (!cell || cell.picked || cell.div3) {
+      lastHoveredCell = null;
+      return;
+    }
+
+    if (cell === lastHoveredCell) return;
+    lastHoveredCell = cell;
+
+    // Check if this is the second-to-last cell in chain (undo)
+    if (dragChain.length >= 2 && cell === dragChain[dragChain.length - 2]) {
+      removeLastFromChain();
+      return;
+    }
+
+    // Add to chain if not already in it
+    if (!dragChain.includes(cell)) {
+      addToChain(cell);
+    }
+  });
+
+  gameContainer.addEventListener('pointerup', (e) => {
+    if (!gameActive) return;
+    if (dragPointerId !== e.pointerId) return;
+
+    try { gameContainer.releasePointerCapture(e.pointerId); } catch {}
+
+    const dx = e.clientX - dragStartX;
+    const dy = e.clientY - dragStartY;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    const duration = Date.now() - dragStartTime;
+
+    if (dragStartCell && dragStartCell.div3 && !dragActive) {
+      // Tap on div3 cell
+      if (dist < 10 && duration < 300) {
+        onCellClick(dragStartCell);
+      }
+      dragStartCell = null;
+      dragPointerId = null;
+      return;
+    }
+
+    if (dragActive && dragChain.length === 1 && dist < 10 && duration < 300) {
+      // Short tap on non-div3 cell
+      const cell = dragChain[0];
+      // Clean up drag visuals
+      cell.el.classList.remove('drag-source');
+      if (dragPolyline) { dragPolyline.remove(); dragPolyline = null; }
+      if (sumIndicator) sumIndicator.style.display = 'none';
+      dragActive = false;
+      dragChain = [];
+
+      if (!cell.pairable) {
+        // Non-pairable non-div3: penalize
+        onCellClick(cell);
+      }
+      // else: pairable — ignore
+      dragStartCell = null;
+      dragPointerId = null;
+      return;
+    }
+
+    endDrag();
+    dragPointerId = null;
+  });
+
+  gameContainer.addEventListener('pointercancel', (e) => {
+    if (dragPointerId === e.pointerId) {
+      endDrag();
+      dragPointerId = null;
+    }
+  });
+
   /* ── HUD ────────────────────────────────────── */
   function updateHUD() {
     foundDisp.textContent = `${foundCount} / ${totalDiv3}`;
+    chainsDisp.textContent = chainCount;
     scoreDisp.textContent = score;
   }
 
@@ -701,6 +1112,16 @@
     gameActive = false;
     clearInterval(timerInterval);
 
+    // Cancel any active drag
+    if (dragActive) {
+      dragChain.forEach(c => c.el.classList.remove('drag-source', 'chain-member'));
+      if (dragPolyline) { dragPolyline.remove(); dragPolyline = null; }
+      if (sumIndicator) sumIndicator.style.display = 'none';
+      dragActive = false;
+      dragChain = [];
+      dragPointerId = null;
+    }
+
     // Reveal unfound div3 cells
     cells.forEach(c => {
       if (c.div3 && !c.picked) c.el.classList.add('reveal');
@@ -733,6 +1154,7 @@
 
       $('result-stats').innerHTML = `
         Found <span>${foundCount}</span> of <span>${totalDiv3}</span> divisible-by-3 numbers<br>
+        ${chainCount > 0 ? `Chains: <span style="color:#7c3aed">${chainCount}</span><br>` : ''}
         Final Score: <span style="color:var(--correct)">${score}</span><br>
         Difficulty: <span>${difficulty}</span>
         ${allFound ? `<br>Time remaining bonus: <span>+${Math.round(timeLeft * 100)}</span>` : ''}
